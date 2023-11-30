@@ -1,7 +1,13 @@
+mod components;
+mod controller;
+
 use std::error::Error;
 use std::io::{stdin, stdout, Write};
 
 use midir::{MidiInput, MidiInputPort};
+
+// re-export
+pub use controller::Controller;
 
 pub fn find_in_port(midi_in: &MidiInput) -> Result<MidiInputPort, Box<dyn Error>> {
     let in_ports = midi_in.ports();

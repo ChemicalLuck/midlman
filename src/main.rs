@@ -1,6 +1,5 @@
-mod component;
-mod controller;
 mod midi;
+mod volume;
 
 use std::error::Error;
 use std::io::stdin;
@@ -8,8 +7,8 @@ use std::io::stdin;
 use midir::{Ignore, MidiInput};
 use midly::{live::LiveEvent, MidiMessage};
 
-use controller::Controller;
-use midi::find_in_port;
+use midi::{find_in_port, Controller};
+use volume::AudioController;
 
 fn handle_message(stamp: u64, message: &[u8], midi_controller: &mut Controller) {
     let event = LiveEvent::parse(message).unwrap();
@@ -36,6 +35,25 @@ fn handle_message(stamp: u64, message: &[u8], midi_controller: &mut Controller) 
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
+    // load presets from yaml files
+    //
+    // Select preset
+    //
+    // load configuration from yaml file
+    //
+    // create midi controller with preset and configuration
+    //
+    //
+
+    let mut audio_controller = unsafe { AudioController::new(None) };
+    unsafe {
+        audio_controller.sessions.iter().for_each(|x| {
+            println!("{}", x.get_pid());
+            println!("{}", x.get_name());
+            println!("{}", x.get_volume());
+        });
+    }
+
     let mut input = String::new();
 
     let mut midi_in = MidiInput::new("midir reading input")?;

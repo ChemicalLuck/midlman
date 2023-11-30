@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use midly::num::u7;
 
-use crate::component::{Button, Component, ComponentMut, ComponentType, Dial, Slider};
+use crate::midi::components::{Button, Component, ComponentMut, ComponentType, Dial, Slider};
 
 #[derive(Clone)]
 pub struct Controller {
