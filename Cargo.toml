@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 midir = "0.9.1"
-midly = "0.5.3"
+midly = { version = "0.5.3", features = ["std"], default-features = false }
 serde = { version = "1.0.193", features = ["derive"] }
 serde_yaml = "0.9.27"
 windows = { version = "0.52.0", features = [
