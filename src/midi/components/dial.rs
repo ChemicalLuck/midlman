@@ -16,8 +16,8 @@ impl Dial {
             audio_interface: None,
         }
     }
-    pub fn set_audio_interface(&mut self, audio_interface: Box<dyn Session>) {
-        self.audio_interface = Some(audio_interface);
+    pub fn set_audio_interface(&mut self, audio_interface: &Box<dyn Session>) {
+        self.audio_interface = Some(audio_interface.to_owned());
     }
 }
 

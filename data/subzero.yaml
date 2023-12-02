@@ -1,0 +1,4 @@
+components:
+  sliders: "3-11"
+  buttons: "1,2,23-31,44-49,64,67"
+  dials: "12-21"
