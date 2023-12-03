@@ -1,6 +1,7 @@
 mod midi;
 mod volume;
 
+use std::env;
 use std::fs::File;
 use std::io::stdin;
 use std::{error::Error, io::BufReader};
@@ -12,7 +13,7 @@ use midly::{live::LiveEvent, MidiMessage};
 use midi::{find_in_port, Controller, Preset};
 use volume::{AudioController, CoInitMode};
 
-fn handle_message(message: &[u8], midi_controller: &mut Controller) {
+fn handle_message(message: &[u8], midi_controller: &mut Controller, debug: bool) {
     let event = LiveEvent::parse(message).unwrap();
     match event {
         LiveEvent::Midi {
@@ -20,17 +21,18 @@ fn handle_message(message: &[u8], midi_controller: &mut Controller) {
             message,
         } => match message {
             MidiMessage::Controller { controller, value } => {
-                // println!(
-                //     "Controller, Channel: {:?} id: {:?} value: {:?}",
-                //     channel, controller, value
-                // );
+                if debug {
+                    println!("Controller {:?}: {:?}", controller, value);
+                }
                 midi_controller.set_component(controller, value);
             }
             _ => todo!(),
         },
         LiveEvent::Common(sys_common) => match sys_common {
             midly::live::SystemCommon::SysEx(bytes) => {
-                // println!("SysEx {:?}", bytes);
+                if debug {
+                    println!("SysEx {:?}", bytes);
+                }
                 midi_controller.set_bank(bytes[bytes.len() - 1]);
             }
             _ => todo!(),
@@ -40,6 +42,7 @@ fn handle_message(message: &[u8], midi_controller: &mut Controller) {
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
+    let debug = env::args().any(|x| x == "--debug");
     // load presets from yaml files
     //
     let subzero_path = "data/subzero.yaml";
@@ -85,6 +88,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     let spotify = unsafe { audio_controller.get_session_by_name("Spotify".to_string()) };
     if let Some(spotify) = spotify {
+        let spotify_clone1 = spotify.clone();
         println!("Found spotify session");
         controller.bind_component(
             u7::from(5),
@@ -93,7 +97,18 @@ fn run() -> Result<(), Box<dyn Error>> {
                 println!("Setting spotify volume to {}", normalized);
                 // convert to i32, divide by 127
                 unsafe {
-                    spotify.lock().unwrap().set_volume(normalized);
+                    spotify_clone1.lock().unwrap().set_volume(normalized);
+                }
+            }),
+        );
+        let spotify_clone2 = spotify.clone();
+        controller.bind_component(
+            u7::from(25),
+            Box::new(move |value| unsafe {
+                if value.as_int() == 127 {
+                    let muted = spotify_clone2.lock().unwrap().get_mute();
+                    println!("Setting spotify mute to {}", !muted);
+                    spotify_clone2.lock().unwrap().set_mute(!muted);
                 }
             }),
         );
@@ -102,7 +117,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let _conn_in = midi_in.connect(
         &in_port,
         "midir-read-input",
-        move |_, message, _| handle_message(message, &mut controller),
+        move |_, message, _| handle_message(message, &mut controller, debug),
         (),
     )?;
 
