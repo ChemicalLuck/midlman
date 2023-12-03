@@ -1,23 +1,29 @@
 use midly::num::u7;
 
 use crate::midi::components::{Component, ComponentMut};
-use crate::volume::Session;
+
+use super::ComponentCallback;
 
 #[derive(Clone)]
 pub struct Dial {
     controller: u7,
-    audio_interface: Option<Box<dyn Session>>,
+    callback: Option<Box<dyn ComponentCallback>>,
 }
 
 impl Dial {
-    pub fn new(controller: u7) -> Dial {
-        Dial {
+    pub fn new(controller: u7) -> Self {
+        Self {
             controller,
-            audio_interface: None,
+            callback: None,
         }
     }
-    pub fn set_audio_interface(&mut self, audio_interface: &Box<dyn Session>) {
-        self.audio_interface = Some(audio_interface.to_owned());
+    pub fn set_callback(&mut self, callback: Box<dyn ComponentCallback>) {
+        self.callback = Some(callback);
+    }
+    pub fn invoke_callback(&self, value: u7) {
+        if let Some(callback) = &self.callback {
+            callback(value);
+        }
     }
 }
 
@@ -29,10 +35,6 @@ impl Component for Dial {
 
 impl ComponentMut for Dial {
     fn set_value(&mut self, value: u7) {
-        if let Some(audio_interface) = &mut self.audio_interface {
-            unsafe {
-                audio_interface.set_volume(value.as_int() as f32 / 127.0);
-            }
-        }
+        self.invoke_callback(value);
     }
 }

@@ -10,24 +10,27 @@ use midly::num::u7;
 use midly::{live::LiveEvent, MidiMessage};
 
 use midi::{find_in_port, Controller, Preset};
-use volume::AudioController;
+use volume::{AudioController, CoInitMode};
 
-fn handle_message(stamp: u64, message: &[u8], midi_controller: &mut Controller) {
+fn handle_message(message: &[u8], midi_controller: &mut Controller) {
     let event = LiveEvent::parse(message).unwrap();
     match event {
-        LiveEvent::Midi { channel, message } => match message {
+        LiveEvent::Midi {
+            channel: _,
+            message,
+        } => match message {
             MidiMessage::Controller { controller, value } => {
-                println!(
-                    "{}: Controller, Channel: {:?} id: {:?} value: {:?}",
-                    stamp, channel, controller, value
-                );
+                // println!(
+                //     "Controller, Channel: {:?} id: {:?} value: {:?}",
+                //     channel, controller, value
+                // );
                 midi_controller.set_component(controller, value);
             }
             _ => todo!(),
         },
         LiveEvent::Common(sys_common) => match sys_common {
             midly::live::SystemCommon::SysEx(bytes) => {
-                println!("{}: SysEx {:?}", stamp, bytes);
+                // println!("SysEx {:?}", bytes);
                 midi_controller.set_bank(bytes[bytes.len() - 1]);
             }
             _ => todo!(),
@@ -40,12 +43,11 @@ fn run() -> Result<(), Box<dyn Error>> {
     // load presets from yaml files
     //
     let subzero_path = "data/subzero.yaml";
-    let mut reader = BufReader::new(File::open(subzero_path)?);
+    let reader = BufReader::new(File::open(subzero_path)?);
 
     // Select preset
     //
     let subzero_preset: Preset = serde_yaml::from_reader(reader)?;
-    println!("{:?}", subzero_preset);
 
     // load configuration from yaml file
     //
@@ -55,12 +57,16 @@ fn run() -> Result<(), Box<dyn Error>> {
     // run application
     //
 
-    let audio_controller = unsafe { AudioController::new(None) };
+    let audio_controller = unsafe { AudioController::new(CoInitMode::MultiThreaded) };
     unsafe {
+        println!("Sessions:");
         audio_controller.sessions.iter().for_each(|x| {
-            println!("{}", x.get_pid());
-            println!("{}", x.get_name());
-            println!("{}", x.get_volume());
+            println!(
+                "  {}:\n    PID: {},\n    Volume: {}",
+                x.get_name(),
+                x.get_pid(),
+                x.get_volume()
+            );
         });
     }
 
@@ -80,13 +86,23 @@ fn run() -> Result<(), Box<dyn Error>> {
     let spotify = unsafe { audio_controller.get_session_by_name("Spotify".to_string()) };
     if let Some(spotify) = spotify {
         println!("Found spotify session");
-        controller.bind_component(u7::from(5), spotify);
+        controller.bind_component(
+            u7::from(5),
+            Box::new(move |value| {
+                let normalized = value.as_int() as f32 / 127.0;
+                println!("Setting spotify volume to {}", normalized);
+                // convert to i32, divide by 127
+                unsafe {
+                    spotify.lock().unwrap().set_volume(normalized);
+                }
+            }),
+        );
     }
 
     let _conn_in = midi_in.connect(
         &in_port,
         "midir-read-input",
-        move |stamp, message, _| handle_message(stamp, message, &mut controller),
+        move |_, message, _| handle_message(message, &mut controller),
         (),
     )?;
 

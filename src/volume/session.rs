@@ -8,6 +8,11 @@ use windows::{
     },
 };
 
+fn linear_to_logarithmic(vol: f32) -> f32 {
+    let vol = vol.clamp(0.0, 1.0);
+    2.0f32.powf(vol.powf(4.0)) - 1.0
+}
+
 pub trait Session: Send {
     unsafe fn get_audio_endpoint_volume(&self) -> Option<IAudioEndpointVolume>;
     unsafe fn get_name(&self) -> String;
@@ -73,6 +78,7 @@ impl Session for EndPointSession {
             })
     }
     unsafe fn set_volume(&self, vol: f32) {
+        let vol = linear_to_logarithmic(vol);
         self.simple_audio_volume
             .SetMasterVolumeLevelScalar(vol, &self.guid)
             .unwrap_or_else(|err| {
@@ -149,6 +155,7 @@ impl Session for ApplicationSession {
             })
     }
     unsafe fn set_volume(&self, vol: f32) {
+        let vol = linear_to_logarithmic(vol);
         self.simple_audio_volume
             .SetMasterVolume(vol, &self.guid)
             .unwrap_or_else(|err| {

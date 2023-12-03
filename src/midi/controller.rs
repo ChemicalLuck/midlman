@@ -5,7 +5,7 @@ use midly::num::u7;
 use crate::midi::components::{Button, Component, ComponentMut, ComponentType, Dial, Slider};
 use crate::midi::preset::Preset;
 
-use crate::volume::Session;
+use super::components::ComponentCallback;
 
 #[derive(Clone)]
 pub struct Controller {
@@ -161,11 +161,11 @@ impl Controller {
             .find(|s| s.get_controller() == controller)
             .map(|s| s.set_value(value));
     }
-    fn bind_slider(&mut self, controller: u7, audio_interface: &Box<dyn Session>) {
+    fn bind_slider(&mut self, controller: u7, callback: Box<dyn ComponentCallback>) {
         self.sliders[self.bank.as_int() as usize]
             .iter_mut()
             .find(|s| s.get_controller() == controller)
-            .map(|s| s.set_audio_interface(audio_interface));
+            .map(|s| s.set_callback(callback));
     }
     fn set_button(&mut self, controller: u7, value: u7) {
         self.buttons[self.bank.as_int() as usize]
@@ -173,11 +173,11 @@ impl Controller {
             .find(|b| b.get_controller() == controller)
             .map(|b| b.set_value(value));
     }
-    fn bind_button(&mut self, controller: u7, audio_interface: &Box<dyn Session>) {
+    fn bind_button(&mut self, controller: u7, callback: Box<dyn ComponentCallback>) {
         self.buttons[self.bank.as_int() as usize]
             .iter_mut()
             .find(|b| b.get_controller() == controller)
-            .map(|b| b.set_audio_interface(audio_interface));
+            .map(|b| b.set_callback(callback));
     }
     fn set_dial(&mut self, controller: u7, value: u7) {
         self.dials[self.bank.as_int() as usize]
@@ -185,11 +185,11 @@ impl Controller {
             .find(|d| d.get_controller() == controller)
             .map(|d| d.set_value(value));
     }
-    fn bind_dial(&mut self, controller: u7, audio_interface: &Box<dyn Session>) {
+    fn bind_dial(&mut self, controller: u7, callback: Box<dyn ComponentCallback>) {
         self.dials[self.bank.as_int() as usize]
             .iter_mut()
             .find(|d| d.get_controller() == controller)
-            .map(|d| d.set_audio_interface(audio_interface));
+            .map(|d| d.set_callback(callback));
     }
     pub fn set_component(&mut self, controller: u7, value: u7) {
         if let Some(c) = self.controllers.get(&controller) {
@@ -200,12 +200,12 @@ impl Controller {
             }
         }
     }
-    pub fn bind_component(&mut self, controller: u7, audio_interface: &Box<dyn Session>) {
+    pub fn bind_component(&mut self, controller: u7, callback: Box<dyn ComponentCallback>) {
         if let Some(c) = self.controllers.get(&controller) {
             match c {
-                ComponentType::Slider => self.bind_slider(controller, audio_interface),
-                ComponentType::Button => self.bind_button(controller, audio_interface),
-                ComponentType::Dial => self.bind_dial(controller, audio_interface),
+                ComponentType::Slider => self.bind_slider(controller, callback),
+                ComponentType::Button => self.bind_button(controller, callback),
+                ComponentType::Dial => self.bind_dial(controller, callback),
             }
         }
     }

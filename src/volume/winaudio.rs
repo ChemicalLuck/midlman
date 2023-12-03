@@ -1,11 +1,12 @@
 use std::collections::HashSet;
 use std::process::exit;
+use std::sync::{Arc, Mutex};
 use windows::core::ComInterface;
 use windows::Win32::{
     Media::Audio::{
-        eRender, IAudioSessionControl, IAudioSessionControl2, IAudioSessionManager2, IMMDevice,
-        IMMDeviceCollection, IMMDeviceEnumerator, ISimpleAudioVolume, MMDeviceEnumerator,
-        DEVICE_STATE_ACTIVE,
+        eRender, Endpoints::IAudioEndpointVolume, IAudioSessionControl, IAudioSessionControl2,
+        IAudioSessionManager2, IMMDevice, IMMDeviceCollection, IMMDeviceEnumerator,
+        ISimpleAudioVolume, MMDeviceEnumerator, DEVICE_STATE_ACTIVE,
     },
     System::{
         Com::{
@@ -17,27 +18,24 @@ use windows::Win32::{
     },
 };
 
-use crate::volume::session::{ApplicationSession, Session};
+use crate::volume::session::{ApplicationSession, EndPointSession, Session};
 
 pub struct AudioController {
     pub sessions: Vec<Box<dyn Session>>,
 }
 
+#[allow(dead_code)]
 pub enum CoInitMode {
     MultiThreaded,
     ApartmentThreaded,
 }
 
 impl AudioController {
-    pub unsafe fn new(coinit_mode: Option<CoInitMode>) -> Self {
-        let mut coinit: windows::Win32::System::Com::COINIT = COINIT_MULTITHREADED;
-        if let Some(x) = coinit_mode {
-            match x {
-                CoInitMode::MultiThreaded => coinit = COINIT_MULTITHREADED,
-                CoInitMode::ApartmentThreaded => coinit = COINIT_APARTMENTTHREADED,
-            }
-        }
-
+    pub unsafe fn new(coinit_mode: CoInitMode) -> Self {
+        let coinit = match coinit_mode {
+            CoInitMode::MultiThreaded => COINIT_MULTITHREADED,
+            CoInitMode::ApartmentThreaded => COINIT_APARTMENTTHREADED,
+        };
         CoInitializeEx(None, coinit).unwrap_or_else(|err| {
             eprintln!("ERRORL: Couldn't initialize windows connection: {err}");
             exit(1);
@@ -75,43 +73,23 @@ impl AudioController {
         devices
     }
 
-    // pub unsafe fn get_default_audio_enpoint_volume_control(&mut self) {
-    //     if self.imm_device_enumerator.is_none() {
-    //         eprintln!("ERROR: Function called before creating enumerator");
-    //         return;
-    //     }
-    //
-    //     self.default_device = Some(
-    //         self.imm_device_enumerator
-    //             .clone()
-    //             .unwrap()
-    //             .GetDefaultAudioEndpoint(eRender, eMultimedia)
-    //             .unwrap_or_else(|err| {
-    //                 eprintln!("ERROR: Couldn't get Default audio endpoint {err}");
-    //                 exit(1);
-    //             }),
-    //     );
-    //     let simple_audio_volume: IAudioEndpointVolume = self
-    //         .default_device
-    //         .clone()
-    //         .unwrap()
-    //         .Activate(CLSCTX_ALL, None)
-    //         .unwrap_or_else(|err| {
-    //             eprintln!("ERROR: Couldn't get Endpoint volume control: {err}");
-    //             exit(1);
-    //         });
-    //
-    //     self.sessions.push(Box::new(EndPointSession::new(
-    //         simple_audio_volume,
-    //         "master".to_string(),
-    //         0,
-    //     )));
-    // }
-
     unsafe fn get_sessions() -> Vec<Box<dyn Session>> {
         let mut sessions: Vec<Box<dyn Session>> = Vec::new();
 
         for device in Self::get_devices() {
+            let device_volume: IAudioEndpointVolume = device
+                .Activate(CLSCTX_INPROC_SERVER, None)
+                .unwrap_or_else(|err| {
+                    eprintln!("ERROR: Couldn't get device volume control: {err}");
+                    exit(1);
+                });
+
+            sessions.push(Box::new(EndPointSession::new(
+                device_volume,
+                "master".to_string(),
+                0,
+            )));
+
             let session_manager2: IAudioSessionManager2 = device.Activate(CLSCTX_INPROC_SERVER, None).unwrap_or_else(|err| {
                 eprintln!("ERROR: Couldnt get AudioSessionManager for enumerating over processes... {err}");
                 exit(1);
@@ -203,11 +181,11 @@ impl AudioController {
         sessions
     }
 
-    pub unsafe fn get_all_session_names(&self) -> Vec<String> {
-        self.sessions.iter().map(|i| i.get_name()).collect()
-    }
-
-    pub unsafe fn get_session_by_name(&self, name: String) -> Option<&Box<dyn Session>> {
-        self.sessions.iter().find(|i| i.get_name() == name)
+    pub unsafe fn get_session_by_name(&self, name: String) -> Option<Arc<Mutex<Box<dyn Session>>>> {
+        let session = self.sessions.iter().find(|i| i.get_name() == name);
+        match session {
+            Some(data) => Some(Arc::new(Mutex::new(data.clone()))),
+            None => None,
+        }
     }
 }
